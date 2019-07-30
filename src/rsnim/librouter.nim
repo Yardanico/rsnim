@@ -24,7 +24,10 @@ type
   ModuleDescPtr* = ptr ModuleDesc
 
 const
-  librouterdll = "liblibrouter.so"
+  librouterdll = 
+    when defined(Windows): "librouter.dll" 
+    elif defined(Linux): "liblibrouter.so"
+    else: "No librouter for your platform :(" 
 
 {.pragma: librouter, discardable, stdcall, importc, dynlib: librouterdll.}
 
