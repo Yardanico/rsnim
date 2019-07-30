@@ -30,7 +30,7 @@ template checkRaise(call: untyped): untyped =
     raise newException(ValueError, astToStr(call) & " didn't succeed!")
 
 
-template strToPointer(str: untyped): untyped = str[0]. addr
+template strToPointer(str: untyped): untyped = str[0].addr
 
 
 template newSetting(settingData, typ: untyped): untyped =
@@ -61,7 +61,7 @@ proc set*[T](s: var SettingContainer[T], data: T) =
 
   # Works for enums and any int/uint types
   when compiles(DWord(data)):
-    checkRaise SetParamW(s.setting, DWord(data))
+    checkRaise SetParamW(DWord(s.setting), DWord(data))
   # For cstrings and strings
   elif data is cstring | string:
     var param = data
@@ -79,7 +79,7 @@ var userAgent* = newSetting(UserAgent, string)
 
 var useCustomPage* = newSetting(UseCustomPage, bool)
 
-var dualAuthCheck* = newSetting(DualAUthCheck, bool)
+var dualAuthCheck* = newSetting(DualAuthCheck, bool)
 
 
 # We don't export these because we provide `setProxy` and `setCredentials`
@@ -119,11 +119,10 @@ proc setCredentials*(user, pass: string) =
   credsPassword.set(pass)
 
 
-proc registerCallback(
-  fun: proc (rawRow: DWord, rawName, rawValue: WideCString) {.nimcall.}) =
+proc registerCallback[T](typ: Setting, fun: T) =
   # We need to declare proc as {.nimcall.} here and in the onTableChange 
   # so it doesn't become a closure
-  checkRaise SetParamW(SetTableDataCallback, cast[pointer](fun))
+  checkRaise SetParamW(DWord(typ), cast[pointer](fun))
 
 template onTableChange*(body: untyped) =
   ## Can be used to set a callback for any change in scan table
@@ -132,16 +131,29 @@ template onTableChange*(body: untyped) =
   ## - `name` (string) - name of changed column
   ## - `value` (string) - value of changed column
   ##
-  ## You can declare only *one* callback currently!
-  bind registerCallback
-
+  ## You can declare only *one* TableChange callback!
   proc onChange(rawRow: DWord, rawName, rawValue: WideCString) {.nimcall.} =
     let row {.inject.} = int(rawRow)
     let name {.inject.} = $rawName
     let value {.inject.} = $rawValue
     body
 
-  registerCallback(onChange)
+  registerCallback(SetTableDataCallback, onChange)
+
+
+template onWriteLog*(body: untyped) = 
+  ## Can be used to set a callback for any new log entry
+  ## You can access these parameters in the body:
+  ## - `verb` (int) - verbosity level (from 1 to 3)
+  ## - `log` (string) - line from the log
+  ##
+  ## You can declare only *one* WriteLog callback!
+  proc onWriteLog(data: WideCString, verbosity: byte) {.nimcall.} = 
+    let log {.inject.} = $data
+    let verb {.inject.} = int(verbosity)
+    body
+  
+  registerCallback(WriteLogCallback, onWriteLog)
 
 
 var modules*: seq[Module]     ## A sequence of all modules available
@@ -204,7 +216,7 @@ proc scan*(address: string, row: int) =
     ipAddr = ipAddrToUint(a, b, c, d)
   else:
     raise newException(ValueError, "Invalid IP address!")
-
+  
   var routerPtr: pointer
   checkRaise PrepareRouter(DWord(row), ipAddr, Word(port), addr routerPtr)
   checkRaise ScanRouter(routerPtr)

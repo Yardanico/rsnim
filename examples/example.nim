@@ -13,19 +13,25 @@ if not fileExists(file):
 var ips = newSeq[string]()
 
 for line in lines(file):
-  if line == "":
-    continue
-  let temp = line.split(":")
-  if temp.len != 2:
-    # Skip invalid entries
-    echo "Wrong IP format: " & line
-    continue
-  ips.add(line)
+  if line == "": continue
+  # Just for the example use 80 and 8080 ports
+  ips.add(line & ":80")
+  ips.add(line & ":8080")
 
+
+# Set max verbosity for debugging
+debug.set(true)
+debugVerbosity.set(byte(3))
 
 onTableChange:
   if name == "Auth":
     echo &"Got auth: IP: {ips[row]}, auth data: {value}"
+
+onWriteLog:
+  echo $verb & " - " & log
+
+# Limit max number of threads by 16
+setMaxPoolSize(16)
 
 # We use index (i) for row number
 for i, ip in ips:
